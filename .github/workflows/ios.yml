@@ -1,0 +1,112 @@
+# Build orchestration only. The Unity project, Xcode export, full build logs and IPA remain private.
+# Public metadata includes source revision, project identifiers and job status.
+name: Private Unity iPhone build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-unity-iphone-0.14
+  cancel-in-progress: false
+
+jobs:
+  ios:
+    if: github.repository == 'kokasikhorik-bot/rust-mobile-ios-runner' && github.actor == 'kokasikhorik-bot'
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    env:
+      GH_REPO: kokasikhorik-bot/rust-animation-lab
+      EXPORTED_SOURCE: e0bd29f8b13e2951b7c9eba61a684b91f7d9d04e
+      XCODE_RELEASE: unity-xcode-0.14
+      IPA_RELEASE: unity-ios-v0.14.0-build22
+    steps:
+      - name: Fetch pinned private packaging tools
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: kokasikhorik-bot/rust-animation-lab
+          ref: e0bd29f8b13e2951b7c9eba61a684b91f7d9d04e
+          token: ${{ secrets.RUST_BUILD_TOKEN }}
+          sparse-checkout: unity/Tools
+          persist-credentials: false
+          fetch-depth: 1
+          path: private-tools
+      - name: Download and verify private Unity export
+        env:
+          GH_TOKEN: ${{ secrets.RUST_BUILD_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/unity-export"
+          gh release download "$XCODE_RELEASE" --repo "$GH_REPO" \
+            --pattern 'xcode-manifest.json' --pattern 'RustMobile-Xcode.tar.gz.part-*' \
+            --dir "$RUNNER_TEMP/unity-export"
+          python3 private-tools/unity/Tools/restore_xcode.py \
+            "$RUNNER_TEMP/unity-export" "$RUNNER_TEMP/unity-xcode" "$EXPORTED_SOURCE"
+      - name: Compile native iPhone application
+        # No private-repository token is passed to Xcode or its build scripts.
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -project "$RUNNER_TEMP/unity-xcode/Unity-iPhone.xcodeproj" \
+            -scheme Unity-iPhone -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/unity-derived" \
+            "CONFIGURATION_BUILD_DIR=$RUNNER_TEMP/unity-products" ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' DEVELOPMENT_TEAM='' build \
+            > "$RUNNER_TEMP/unity-xcodebuild.log" 2>&1 || {
+              echo 'Xcode build failed. Diagnostics are saved to the private export release.'
+              exit 1
+            }
+      - name: Package and verify IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 private-tools/unity/Tools/package_ipa.py \
+            "$RUNNER_TEMP/unity-products" "$RUNNER_TEMP/unity-package" \
+            > "$RUNNER_TEMP/unity-package.log" 2>&1
+          cd "$RUNNER_TEMP/unity-package"
+          ditto -c -k --sequesterRsrc --keepParent Payload RustMobile-Unity-0.14-unsigned.ipa
+          shasum -a 256 RustMobile-Unity-0.14-unsigned.ipa
+      - name: Publish IPA in the private game repository
+        env:
+          GH_TOKEN: ${{ secrets.RUST_BUILD_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$IPA_RELEASE" \
+            "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.14-unsigned.ipa" \
+            --repo "$GH_REPO" --verify-tag --target "$EXPORTED_SOURCE" --prerelease \
+            --title 'Unity iPhone prototype 0.14 — build 22' \
+            --notes 'Built from the verified private Unity export on a standard macOS runner. Unsigned IPA requires personal signing. Physical iPhone testing remains pending.'
+      - name: Preserve IPA if publication failed
+        if: failure()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.RUST_BUILD_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.14-unsigned.ipa"; then
+            cp "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.14-unsigned.ipa" \
+              "$RUNNER_TEMP/RustMobile-Unity-0.14-public-run-${GITHUB_RUN_ID}-unsigned.ipa"
+            gh release upload "$XCODE_RELEASE" \
+              "$RUNNER_TEMP/RustMobile-Unity-0.14-public-run-${GITHUB_RUN_ID}-unsigned.ipa" --repo "$GH_REPO"
+          fi
+      - name: Save diagnostics in the private game repository
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.RUST_BUILD_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for kind in xcodebuild package; do
+            log="$RUNNER_TEMP/unity-${kind}.log"
+            if test -f "$log"; then
+              target="$RUNNER_TEMP/private-unity-${kind}-public-run-${GITHUB_RUN_ID}.log"
+              cp "$log" "$target"
+              gh release upload "$XCODE_RELEASE" "$target" --repo "$GH_REPO"
+            fi
+          done
