@@ -40,11 +40,25 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/unity-export"
-          gh release download "$XCODE_RELEASE" --repo "$GH_REPO" \
-            --pattern 'xcode-manifest.json' --pattern 'RustMobile-Xcode.tar.gz.part-*' \
-            --dir "$RUNNER_TEMP/unity-export"
+          for attempt in 1 2 3; do
+            if gh release download "$XCODE_RELEASE" --repo "$GH_REPO" \
+              --pattern 'xcode-manifest.json' --pattern 'RustMobile-Xcode.tar.gz.part-*' \
+              --dir "$RUNNER_TEMP/unity-export" --clobber \
+              > "$RUNNER_TEMP/unity-download.log" 2>&1; then
+              break
+            fi
+            if test "$attempt" = 3; then
+              echo 'Export download failed. Diagnostics are saved to the private export release.'
+              exit 1
+            fi
+            sleep 5
+          done
           python3 private-tools/unity/Tools/restore_xcode.py \
-            "$RUNNER_TEMP/unity-export" "$RUNNER_TEMP/unity-xcode" "$EXPORTED_SOURCE"
+            "$RUNNER_TEMP/unity-export" "$RUNNER_TEMP/unity-xcode" "$EXPORTED_SOURCE" \
+            >> "$RUNNER_TEMP/unity-download.log" 2>&1 || {
+              echo 'Export verification failed. Diagnostics are saved to the private export release.'
+              exit 1
+            }
       - name: Compile native iPhone application
         # No private-repository token is passed to Xcode or its build scripts.
         shell: bash
@@ -102,7 +116,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for kind in xcodebuild package; do
+          for kind in download xcodebuild package; do
             log="$RUNNER_TEMP/unity-${kind}.log"
             if test -f "$log"; then
               target="$RUNNER_TEMP/private-unity-${kind}-public-run-${GITHUB_RUN_ID}.log"
