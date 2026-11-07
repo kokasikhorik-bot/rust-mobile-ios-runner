@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: private-unity-iphone-0.25
+  group: private-unity-iphone-0.26
   cancel-in-progress: false
 
 jobs:
@@ -19,15 +19,15 @@ jobs:
     timeout-minutes: 45
     env:
       GH_REPO: kokasikhorik-bot/rust-animation-lab
-      EXPORTED_SOURCE: 8910c42f204be7f0b5ccfa7d76776389cc16d88c
-      XCODE_RELEASE: unity-xcode-0.25
-      IPA_RELEASE: unity-ios-v0.25.0-build35
+      EXPORTED_SOURCE: d36c14e3b3968b7f0904deb41ebf596c9980fba0
+      XCODE_RELEASE: unity-xcode-0.26
+      IPA_RELEASE: unity-ios-v0.26.0-build36
     steps:
       - name: Fetch pinned private packaging tools
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: kokasikhorik-bot/rust-animation-lab
-          ref: 8910c42f204be7f0b5ccfa7d76776389cc16d88c
+          ref: d36c14e3b3968b7f0904deb41ebf596c9980fba0
           token: ${{ secrets.RUST_BUILD_TOKEN }}
           sparse-checkout: unity/Tools
           persist-credentials: false
@@ -67,8 +67,8 @@ jobs:
             "$RUNNER_TEMP/unity-products" "$RUNNER_TEMP/unity-package" \
             > "$RUNNER_TEMP/unity-package.log" 2>&1
           cd "$RUNNER_TEMP/unity-package"
-          ditto -c -k --sequesterRsrc --keepParent Payload RustMobile-Unity-0.25-unsigned.ipa
-          shasum -a 256 RustMobile-Unity-0.25-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload RustMobile-Unity-0.26-unsigned.ipa
+          shasum -a 256 RustMobile-Unity-0.26-unsigned.ipa
       - name: Publish IPA in the private game repository
         env:
           GH_TOKEN: ${{ secrets.RUST_BUILD_TOKEN }}
@@ -76,9 +76,9 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "$IPA_RELEASE" \
-            "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.25-unsigned.ipa" \
+            "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.26-unsigned.ipa" \
             --repo "$GH_REPO" --verify-tag --target "$EXPORTED_SOURCE" --prerelease \
-            --title 'Unity iPhone prototype 0.25 — build 35' \
+            --title 'Unity iPhone prototype 0.26 — build 36' \
             --notes 'Built from the verified private Unity export on a standard macOS runner. Unsigned IPA requires personal signing. Physical iPhone testing remains pending.'
       - name: Preserve IPA if publication failed
         if: failure()
@@ -88,11 +88,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if test -f "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.25-unsigned.ipa"; then
-            cp "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.25-unsigned.ipa" \
-              "$RUNNER_TEMP/RustMobile-Unity-0.25-public-run-${GITHUB_RUN_ID}-unsigned.ipa"
+          if test -f "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.26-unsigned.ipa"; then
+            cp "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.26-unsigned.ipa" \
+              "$RUNNER_TEMP/RustMobile-Unity-0.26-public-run-${GITHUB_RUN_ID}-unsigned.ipa"
             gh release upload "$XCODE_RELEASE" \
-              "$RUNNER_TEMP/RustMobile-Unity-0.25-public-run-${GITHUB_RUN_ID}-unsigned.ipa" --repo "$GH_REPO"
+              "$RUNNER_TEMP/RustMobile-Unity-0.26-public-run-${GITHUB_RUN_ID}-unsigned.ipa" --repo "$GH_REPO"
           fi
       - name: Save diagnostics in the private game repository
         if: always()
