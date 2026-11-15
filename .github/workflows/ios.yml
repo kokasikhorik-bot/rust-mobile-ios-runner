@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: private-unity-iphone-0.48
+  group: private-unity-iphone-0.49
   cancel-in-progress: false
 
 jobs:
@@ -19,30 +19,20 @@ jobs:
     timeout-minutes: 45
     env:
       GH_REPO: kokasikhorik-bot/rust-animation-lab
-      EXPORTED_SOURCE: 72217654576d8a73392a07e6bb8331be91468bf7
-      XCODE_RELEASE: unity-xcode-0.48
-      IPA_RELEASE: unity-ios-v0.48.0-build58
+      EXPORTED_SOURCE: d778fb9b2dbe9b3688465b80dddc491d701718d4
+      XCODE_RELEASE: unity-xcode-0.49
+      IPA_RELEASE: unity-ios-v0.49.0-build59
     steps:
       - name: Fetch pinned private packaging tools
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: kokasikhorik-bot/rust-animation-lab
-          ref: 50acd93282bb4d22a606c6d9b83a6abe4c7f7a11
+          ref: d778fb9b2dbe9b3688465b80dddc491d701718d4
           token: ${{ secrets.RUST_BUILD_TOKEN }}
           sparse-checkout: unity/Tools
           persist-credentials: false
           fetch-depth: 1
           path: private-tools
-      - name: Fetch pinned export verifier
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: kokasikhorik-bot/rust-animation-lab
-          ref: 72217654576d8a73392a07e6bb8331be91468bf7
-          token: ${{ secrets.RUST_BUILD_TOKEN }}
-          sparse-checkout: unity/Tools
-          persist-credentials: false
-          fetch-depth: 1
-          path: export-verifier
       - name: Verify packaging contract
         shell: bash
         run: python3 private-tools/unity/Tools/test_package_ipa.py -v
@@ -66,7 +56,7 @@ jobs:
             fi
             sleep 5
           done
-          python3 export-verifier/unity/Tools/restore_xcode.py \
+          python3 private-tools/unity/Tools/restore_xcode.py \
             "$RUNNER_TEMP/unity-export" "$RUNNER_TEMP/unity-xcode" "$EXPORTED_SOURCE" \
             >> "$RUNNER_TEMP/unity-download.log" 2>&1 || {
               echo 'Export verification failed. Diagnostics are saved to the private export release.'
@@ -92,11 +82,11 @@ jobs:
           set -euo pipefail
           python3 private-tools/unity/Tools/package_ipa.py \
             "$RUNNER_TEMP/unity-products" "$RUNNER_TEMP/unity-package" \
-            --version 0.48.0 --build 48 \
+            --version 0.49.0 --build 49 \
             > "$RUNNER_TEMP/unity-package.log" 2>&1
           cd "$RUNNER_TEMP/unity-package"
-          ditto -c -k --sequesterRsrc --keepParent Payload RustMobile-Unity-0.48-unsigned.ipa
-          shasum -a 256 RustMobile-Unity-0.48-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload RustMobile-Unity-0.49-unsigned.ipa
+          shasum -a 256 RustMobile-Unity-0.49-unsigned.ipa
       - name: Publish IPA in the private game repository
         env:
           GH_TOKEN: ${{ secrets.RUST_BUILD_TOKEN }}
@@ -104,9 +94,9 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "$IPA_RELEASE" \
-            "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.48-unsigned.ipa" \
+            "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.49-unsigned.ipa" \
             --repo "$GH_REPO" --verify-tag --target "$EXPORTED_SOURCE" --prerelease \
-            --title 'Unity iPhone prototype 0.48 — build 58' \
+            --title 'Unity iPhone prototype 0.49 — build 59' \
             --notes 'Built from the verified private Unity export on a standard macOS runner. Unsigned IPA requires personal signing. Physical iPhone testing remains pending.'
       - name: Preserve IPA if publication failed
         if: failure()
@@ -116,17 +106,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if test -f "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.48-unsigned.ipa"; then
-            cp "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.48-unsigned.ipa" \
-              "$RUNNER_TEMP/RustMobile-Unity-0.48-public-run-${GITHUB_RUN_ID}-unsigned.ipa"
+          if test -f "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.49-unsigned.ipa"; then
+            cp "$RUNNER_TEMP/unity-package/RustMobile-Unity-0.49-unsigned.ipa" \
+              "$RUNNER_TEMP/RustMobile-Unity-0.49-public-run-${GITHUB_RUN_ID}-unsigned.ipa"
             gh release upload "$XCODE_RELEASE" \
-              "$RUNNER_TEMP/RustMobile-Unity-0.48-public-run-${GITHUB_RUN_ID}-unsigned.ipa" --repo "$GH_REPO"
+              "$RUNNER_TEMP/RustMobile-Unity-0.49-public-run-${GITHUB_RUN_ID}-unsigned.ipa" --repo "$GH_REPO"
           elif test -d "$RUNNER_TEMP/unity-products" && \
                find "$RUNNER_TEMP/unity-products" -maxdepth 1 -name '*.app' -print -quit | grep -q .; then
-            tar -czf "$RUNNER_TEMP/RustMobile-Unity-0.48-public-run-${GITHUB_RUN_ID}-products.tar.gz" \
+            tar -czf "$RUNNER_TEMP/RustMobile-Unity-0.49-public-run-${GITHUB_RUN_ID}-products.tar.gz" \
               -C "$RUNNER_TEMP/unity-products" .
             gh release upload "$XCODE_RELEASE" \
-              "$RUNNER_TEMP/RustMobile-Unity-0.48-public-run-${GITHUB_RUN_ID}-products.tar.gz" --repo "$GH_REPO"
+              "$RUNNER_TEMP/RustMobile-Unity-0.49-public-run-${GITHUB_RUN_ID}-products.tar.gz" --repo "$GH_REPO"
           fi
       - name: Save diagnostics in the private game repository
         if: always()
