@@ -33,6 +33,16 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
           path: private-tools
+      - name: Fetch pinned export verifier
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: kokasikhorik-bot/rust-animation-lab
+          ref: 72217654576d8a73392a07e6bb8331be91468bf7
+          token: ${{ secrets.RUST_BUILD_TOKEN }}
+          sparse-checkout: unity/Tools
+          persist-credentials: false
+          fetch-depth: 1
+          path: export-verifier
       - name: Verify packaging contract
         shell: bash
         run: python3 private-tools/unity/Tools/test_package_ipa.py -v
@@ -56,7 +66,7 @@ jobs:
             fi
             sleep 5
           done
-          python3 private-tools/unity/Tools/restore_xcode.py \
+          python3 export-verifier/unity/Tools/restore_xcode.py \
             "$RUNNER_TEMP/unity-export" "$RUNNER_TEMP/unity-xcode" "$EXPORTED_SOURCE" \
             >> "$RUNNER_TEMP/unity-download.log" 2>&1 || {
               echo 'Export verification failed. Diagnostics are saved to the private export release.'
